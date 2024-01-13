@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask App</title>
+</head>
+<body>
+    <h1>Welcome to Your Flask App</h1>
+    
+    <!-- Login Form -->
+    <h2>Login</h2>
+    <form id="login-form">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+        <br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+        <br>
+        <button type="submit">Login</button>
+    </form>
+
+    <!-- Registration Form -->
+    <h2>Register</h2>
+    <form id="register-form">
+        <label for="new-username">Username:</label>
+        <input type="text" id="new-username" name="new-username" required>
+        <br>
+        <label for="new-password">Password:</label>
+        <input type="password" id="new-password" name="new-password" required>
+        <br>
+        <button type="submit">Register</button>
+    </form>
+
+    <!-- Display Protected Content for Regular Users -->
+    <div id="user-content" style="display: none;">
+        <h2>Protected Content</h2>
+        <p>Welcome, <span id="current-user"></span>! You have access to this protected content.</p>
+    </div>
+
+    <!-- Images Display Section -->
+    <div id="images-container" style="display: none;">
+        <h2>Images</h2>
+        <!-- Images will be added here dynamically -->
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-content" style="display: none;">
+        <h2>Admin Dashboard</h2>
+        <p>Welcome, <span id="current-user"></span>! You are viewing the admin dashboard.</p>
+        
+        <!-- Display Book List and Rental Details here based on admin's data -->
+        <h3>Book List</h3>
+        <ul id="book-list">
+            <!-- Book items will be added here dynamically -->
+        </ul>
+
+        <h3>Rental Details</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Book Name</th>
+                    <th>Customer Name</th>
+                    <th>Loan Date</th>
+                    <th>Return Date</th>
+                </tr>
+            </thead>
+            <tbody id="rental-details">
+                <!-- Rental details will be added here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Script to handle form submission and JWT token -->
+    <script>
+        document.getElementById('login-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Send a POST request to the login route with username and password
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.access_token) {
+                    // Store the access token in localStorage for future requests
+                    localStorage.setItem('access_token', data.access_token);
+
+                    // Hide the login and registration forms
+                    document.getElementById('login-form').style.display = 'none';
+                    document.getElementById('register-form').style.display = 'none';
+
+                    // Fetch and display content based on user's role
+                    fetchProtectedContent();
+                } else {
+                    alert(data.msg || 'Login failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+
+        document.getElementById('register-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const newUsername = document.getElementById('new-username').value;
+            const newPassword = document.getElementById('new-password').value;
+
+            // Send a POST request to the register route with new username and password
+            fetch('/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username: newUsername, password: newPassword }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.msg === 'Registration successful') {
+                    // Hide the registration form
+                    document.getElementById('register-form').style.display = 'none';
+                    alert('Registration successful. You can now login.');
+                } else {
+                    alert(data.msg || 'Registration failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+
+        // Function to fetch and display protected content based on user's role
+        function fetchProtectedContent() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                // Fetch user data and check if the user is an admin
+                fetch('/admin/dashboard', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === 'Access denied. Only admin can view this page.') {
+                        // Regular user is logged in, display regular user content
+                        document.getElementById('user-content').style.display = 'block';
+                        document.getElementById('current-user').textContent = data.current_user;
+
+                        // Fetch and display images
+                        fetchAndDisplayImages();
+                    } else {
+                        // Admin is logged in, display admin content
+                        document.getElementById('admin-content').style.display = 'block';
+                        document.getElementById('current-user').textContent = data.current_user;
+
+                        // Display book list and rental details for admin
+                        const bookList = document.getElementById('book-list');
+                        const rentalDetails = document.getElementById('rental-details');
+
+                        data.books.forEach(book => {
+                            const bookItem = document.createElement('li');
+                            bookItem.textContent = `${book.name} by ${book.author} (Published: ${book.year_published})`;
+                            bookList.appendChild(bookItem);
+                        });
+
+                        data.rentals.forEach(rental => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${rental.book_name}</td>
+                                <td>${rental.customer_name}</td>
+                                <td>${rental.loan_date}</td>
+                                <td>${rental.return_date}</td>
+                            `;
+                            rentalDetails.appendChild(row);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            }
+        }
+
+        // Function to fetch and display images
+        function fetchAndDisplayImages() {
+            fetch('/images', {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.images && data.images.length > 0) {
+                    const imagesContainer = document.getElementById('images-container');
+                    data.images.forEach(imageUrl => {
+                        const img = document.createElement('img');
+                        img.src = imageUrl;
+                        img.style.width = '200px';  // Adjust styling as needed
+                        img.style.margin = '10px';
+                        imagesContainer.appendChild(img);
+                    });
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Check if the user is logged in and display content accordingly
+        if (localStorage.getItem('access_token')) {
+            fetchProtectedContent();
+        }
+    </script>
+</body>
+</html>
